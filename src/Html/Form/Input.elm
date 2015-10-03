@@ -75,7 +75,7 @@ basicInput =
     , A.class "form-control"
     , A.placeholder el.label
     , A.value (Maybe.withDefault "" <| Maybe.map el.encoder el.value)
-    , E.on "change" E.targetValue <| \str ->
+    , E.on "input" E.targetValue <| \str ->
         case el.decoder str of
             Err err -> el.onError err
             Ok v -> el.onValue v
@@ -91,7 +91,7 @@ textArea el =
            [ A.id e.id
            , A.class "form-control"
            , A.placeholder e.label
-           , E.on "change" E.targetValue e.onValue
+           , E.on "input" E.targetValue e.onValue
            ] [text (Maybe.withDefault "" <| Maybe.map e.encoder e.value)]
     in formGroup handle el2
 
@@ -227,4 +227,8 @@ selectBox =
     in H.select
         [ A.id el.id
         , A.class "form-control"
+        , E.on "change" E.targetValue <| \str ->
+            case el.decoder str of
+                Err err -> el.onError err
+                Ok v -> el.onValue v
         ] opts
