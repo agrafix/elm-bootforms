@@ -2,6 +2,10 @@
 
 This package tries to provide a very simple and powerful interface to HTML(5) forms powered by [bootstrap](http://getbootstrap.com/). It uses [evancz/elm-html](http://package.elm-lang.org/packages/evancz/elm-html/latest/) as HTML rendering backend.
 
+## Docs
+
+See [agrafix/elm-bootforms](http://package.elm-lang.org/packages/agrafix/elm-bootforms/1.0.0/) on the central elm package repo.
+
 ## Example
 
 ```elm
