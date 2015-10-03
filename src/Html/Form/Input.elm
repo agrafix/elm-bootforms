@@ -35,7 +35,7 @@ type alias Element v e a =
     { a | id: String
         , label: String
         , helpBlock: Maybe String
-        , value: v
+        , value: Maybe v
         , hasError: Bool
         , onValue: v -> Signal.Message
         , onError: e -> Signal.Message
@@ -74,7 +74,7 @@ basicInput =
     , A.id el.id
     , A.class "form-control"
     , A.placeholder el.label
-    , A.value (el.encoder el.value)
+    , A.value (Maybe.withDefault "" <| Maybe.map el.encoder el.value)
     , E.on "change" E.targetValue <| \str ->
         case el.decoder str of
             Err err -> el.onError err
@@ -92,7 +92,7 @@ textArea el =
            , A.class "form-control"
            , A.placeholder e.label
            , E.on "change" E.targetValue e.onValue
-           ] [text (e.encoder e.value)]
+           ] [text (Maybe.withDefault "" <| Maybe.map e.encoder e.value)]
     in formGroup handle el2
 
 {-| A simple text input -}
@@ -193,7 +193,7 @@ checkBox el =
         [ H.input
             [ A.type' "checkbox"
             , A.id el.id
-            , A.checked el.value
+            , A.checked (Maybe.withDefault False el.value)
             , E.on "change" E.targetChecked el.onValue
             ]
             []
@@ -220,7 +220,7 @@ selectBox =
             let valAttr =
                     A.value (el.encoder ch)
                 rest =
-                    if ch == el.value
+                    if Just ch == el.value
                     then [A.selected True]
                     else []
             in H.option (valAttr :: rest) [ text <| el.displayChoice ch ]
