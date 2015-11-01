@@ -102,7 +102,10 @@ basicInput =
     , A.id el.id
     , A.class "form-control"
     , A.placeholder el.label
-    , A.value el.value.userInput
+    , A.value <|
+        case el.value.value of
+            Just v -> el.encoder v
+            Nothing -> el.value.userInput
     , E.on "input" E.targetValue <| \str ->
         el.onValue
         { userInput = str
@@ -121,7 +124,10 @@ textArea el =
            , E.on "input" E.targetValue <| \str ->
                 e.onValue { userInput = str, value = Ok str }
            ]
-           [ text el.value.userInput
+           [ text <|
+                case el.value.value of
+                    Just v -> v
+                    Nothing -> el.value.userInput
            ]
     in formGroup handle el
 
