@@ -1,5 +1,6 @@
 module Html.Form.Input
-    ( Element, FormElement, formGroup
+    ( FormValue
+    , Element, FormElement, formGroup
     , textInput, passwordInput, intInput, floatInput
     , dateInput, TimeOfDay, timeInput
     , checkBox
@@ -10,7 +11,7 @@ module Html.Form.Input
 {-| This module will help generating good looking forms using the twitter bootstrap framework
 
 # Default input element structure
-@docs Element, FormElement
+@docs FormValue, Element, FormElement
 
 # Popular form groups
 @docs textInput, passwordInput, intInput, floatInput, dateInput, TimeOfDay, timeInput, checkBox, SelectElement, selectBox, textArea
@@ -30,28 +31,40 @@ import Html.Attributes as A
 import Html.Events as E
 import Html exposing (text)
 
+{-| The input string of the user and the parsed value -}
+type alias FormValue v =
+    { userInput : String
+    , value : v
+    }
+
 {-| All inputs will be defined by this basic structure -}
 type alias Element v e a =
-    { a | id: String
+    { a
+        | id: String
         , label: String
         , helpBlock: Maybe String
-        , value: Maybe v
-        , hasError: Bool
-        , onValue: v -> Signal.Message
-        , onError: e -> Signal.Message
+        , value: FormValue (Maybe v)
+        , onValue: FormValue (Result e v) -> Signal.Message
     }
 
 {-| An element with de and encoder -}
 type alias FormElement v e a =
     Element v e
-    {  a | decoder: String -> Result e v
-         , encoder: v -> String
+    {  a
+        | decoder: String -> Result e v
+        , encoder: v -> String
     }
 
+isNothing : Maybe v -> Bool
+isNothing r =
+    case r of
+        Nothing -> True
+        Just _ -> False
+
 {-| Build your own input element -}
-formGroup : (FormElement v e a -> H.Html) -> FormElement v e a -> H.Html
+formGroup : (Element v e a -> H.Html) -> Element v e a -> H.Html
 formGroup makeInput el =
-    H.div [ A.class ("form-group" ++ if el.hasError then " has-error" else "") ]
+    H.div [ A.class ("form-group" ++ if isNothing el.value.value then " has-error" else "") ]
     [ H.label [ A.for el.id ] [ text el.label ]
     , makeInput el
     , case el.helpBlock of
@@ -74,33 +87,35 @@ basicInput =
     , A.id el.id
     , A.class "form-control"
     , A.placeholder el.label
-    , A.value (Maybe.withDefault "" <| Maybe.map el.encoder el.value)
+    , A.value el.value.userInput
     , E.on "input" E.targetValue <| \str ->
-        case el.decoder str of
-            Err err -> el.onError err
-            Ok v -> el.onValue v
+        el.onValue
+        { userInput = str
+        , value = el.decoder str
+        }
     ] []
 
 {-| A textarea -}
 textArea : Element String e {} -> H.Html
 textArea el =
-    let el1 = { el | decoder = Ok }
-        el2 = { el1 | encoder = identity}
-        handle e =
+    let handle e =
             H.textarea
            [ A.id e.id
            , A.class "form-control"
            , A.placeholder e.label
-           , E.on "input" E.targetValue e.onValue
-           ] [text (Maybe.withDefault "" <| Maybe.map e.encoder e.value)]
-    in formGroup handle el2
+           , E.on "input" E.targetValue <| \str ->
+                e.onValue { userInput = str, value = Ok str }
+           ]
+           [ text el.value.userInput
+           ]
+    in formGroup handle el
 
 {-| A simple text input -}
 textInput : Element String e {} -> H.Html
 textInput el =
     basicInput <|
     let el1 = { el | decoder = Ok }
-        el2 = { el1 | encoder = identity}
+        el2 = { el1 | encoder = identity }
         el3 = { el2 | type' = "text" }
     in el3
 
@@ -188,13 +203,14 @@ timeInput el =
 {-| A simple checkbox input -}
 checkBox : Element Bool e {} -> H.Html
 checkBox el =
-    H.div [ A.class ("checkbox" ++ if el.hasError then " has-error" else "") ]
+    H.div [ A.class ("checkbox" ++ if isNothing el.value.value then " has-error" else "") ]
     [ H.label []
         [ H.input
             [ A.type' "checkbox"
             , A.id el.id
-            , A.checked (Maybe.withDefault False el.value)
-            , E.on "change" E.targetChecked el.onValue
+            , A.checked (Maybe.withDefault False el.value.value)
+            , E.on "change" E.targetChecked <| \cb ->
+                el.onValue { userInput = if cb then "True" else "False", value = Ok cb }
             ]
             []
         , text (" " ++ el.label)
@@ -220,7 +236,7 @@ selectBox =
             let valAttr =
                     A.value (el.encoder ch)
                 rest =
-                    if Just ch == el.value
+                    if Just ch == el.value.value
                     then [A.selected True]
                     else []
             in H.option (valAttr :: rest) [ text <| el.displayChoice ch ]
@@ -228,7 +244,8 @@ selectBox =
         [ A.id el.id
         , A.class "form-control"
         , E.on "change" E.targetValue <| \str ->
-            case el.decoder str of
-                Err err -> el.onError err
-                Ok v -> el.onValue v
+            el.onValue
+            { userInput = str
+            , value = el.decoder str
+            }
         ] opts
