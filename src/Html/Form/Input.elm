@@ -7,6 +7,7 @@ module Html.Form.Input
     , textArea
     , SelectElement, selectBox
     , InputElement, basicInput
+    , stringFormVal, mayStringFormVal
     ) where
 {-| This module will help generating good looking forms using the twitter bootstrap framework
 
@@ -15,6 +16,9 @@ module Html.Form.Input
 
 # Popular form groups
 @docs textInput, passwordInput, intInput, floatInput, dateInput, TimeOfDay, timeInput, checkBox, SelectElement, selectBox, textArea
+
+# Helper functions
+@docs stringFormVal, mayStringFormVal
 
 # Custom input elements
 @docs InputElement, basicInput
@@ -36,6 +40,17 @@ type alias FormValue v =
     { userInput : String
     , value : v
     }
+
+{-| Generate a FormValue for textual input boxes w/o validation -}
+stringFormVal : String -> FormValue (Maybe String)
+stringFormVal str =
+    { userInput = str
+    , value = Just str
+    }
+
+{-| Generate a FormValue for textual input boxes w/o validation -}
+mayStringFormVal : Maybe String -> FormValue (Maybe String)
+mayStringFormVal = stringFormVal << Maybe.withDefault ""
 
 {-| All inputs will be defined by this basic structure -}
 type alias Element v e a =
