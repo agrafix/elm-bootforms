@@ -29,7 +29,6 @@ module Html.Form.Input
 
 import Date
 import String
-import Time
 import Html as H
 import Html.Attributes as A
 import Html.Events as E
@@ -90,8 +89,7 @@ formGroup makeInput el =
 {-| Spec for an input with a type -}
 type alias InputElement v e a =
     FormElement v e
-    { type': String
-    }
+    { a | type': String }
 
 {-| A simple text input -}
 basicInput : InputElement v e a -> H.Html
@@ -132,7 +130,7 @@ textArea el =
     in formGroup handle el
 
 {-| A simple text input -}
-textInput : Element String e {} -> H.Html
+textInput : InputElement String e {} -> H.Html
 textInput el =
     basicInput <|
     let el1 = { el | decoder = Ok }
@@ -141,7 +139,7 @@ textInput el =
     in el3
 
 {-| A simple password input -}
-passwordInput : Element String e {} -> H.Html
+passwordInput : InputElement String e {} -> H.Html
 passwordInput el =
     basicInput <|
     let el1 = { el | decoder = Ok }
@@ -150,7 +148,7 @@ passwordInput el =
     in el3
 
 {-| A simple int input -}
-intInput : Element Int String {} -> H.Html
+intInput : InputElement Int String {} -> H.Html
 intInput el =
     basicInput <|
     let el1 = { el | decoder = String.toInt }
@@ -159,7 +157,7 @@ intInput el =
     in el3
 
 {-| A simple float input -}
-floatInput : Element Float String {} -> H.Html
+floatInput : InputElement Float String {} -> H.Html
 floatInput el =
     basicInput <|
     let el1 = { el | decoder = String.toFloat }
@@ -168,7 +166,7 @@ floatInput el =
     in el3
 
 {-| A simple date input -}
-dateInput : Element Date.Date String {} -> H.Html
+dateInput : InputElement Date.Date String {} -> H.Html
 dateInput el =
     basicInput <|
     let encode d =
@@ -203,7 +201,7 @@ type alias TimeOfDay =
     }
 
 {-| A simple time input -}
-timeInput : Element TimeOfDay String {} -> H.Html
+timeInput : InputElement TimeOfDay String {} -> H.Html
 timeInput el =
     basicInput <|
     let encode t =
@@ -244,8 +242,9 @@ checkBox el =
 {-| Spec for selectBox -}
 type alias SelectElement v e a =
     FormElement v e
-    { choices: List v
-    , displayChoice: v -> String
+    { a
+        | choices: List v
+        , displayChoice: v -> String
     }
 
 {-| A simple dropdown -}
