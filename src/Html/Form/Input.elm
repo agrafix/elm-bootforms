@@ -180,7 +180,7 @@ dateInput el =
             ++ (String.padLeft 2 '0' <| toString <| dateMonthToInt d) ++ "-"
             ++ (String.padLeft 2 '0' <| toString <| Date.day d)
     in { element = el
-       , props = { type' = "date" }
+       , props = { type' = "text" }
        , decoder = Date.fromString
        , encoder = encode
        }
@@ -222,7 +222,7 @@ timeInput el =
                     Ok { hour = hour, minute = min }
                 _ -> Err <| "Invalid date: " ++ str
     in { element = el
-       , props = { type' = "time" }
+       , props = { type' = "text" }
        , decoder = decode
        , encoder = encode
        }
