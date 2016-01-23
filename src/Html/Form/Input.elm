@@ -53,21 +53,20 @@ mayStringFormVal : Maybe String -> FormValue (Maybe String)
 mayStringFormVal = stringFormVal << Maybe.withDefault ""
 
 {-| All inputs will be defined by this basic structure -}
-type alias Element v e a =
-    { a
-        | id: String
-        , label: String
-        , helpBlock: Maybe String
-        , value: FormValue (Maybe v)
-        , onValue: FormValue (Result e v) -> Signal.Message
+type alias Element v e =
+    { id: String
+    , label: String
+    , helpBlock: Maybe String
+    , value: FormValue (Maybe v)
+    , onValue: FormValue (Result e v) -> Signal.Message
     }
 
 {-| An element with de and encoder -}
 type alias FormElement v e a =
-    Element v e
-    {  a
-        | decoder: String -> Result e v
-        , encoder: v -> String
+    { element: Element v e
+    , props: a
+    , decoder: String -> Result e v
+    , encoder: v -> String
     }
 
 isNothing : Maybe v -> Bool
@@ -77,108 +76,114 @@ isNothing r =
         Just _ -> False
 
 {-| Build your own input element -}
-formGroup : (Element v e a -> H.Html) -> Element v e a -> H.Html
-formGroup makeInput el =
+formGroup : Element v e -> H.Html -> H.Html
+formGroup el view =
     H.div [ A.class ("form-group" ++ if isNothing el.value.value then " has-error" else "") ]
     [ H.label [ A.for el.id ] [ text el.label ]
-    , makeInput el
+    , view
     , case el.helpBlock of
         Just val -> H.span [ A.class "help-block" ] [ text val ]
         Nothing -> H.span [] []
     ]
 
 {-| Spec for an input with a type -}
-type alias InputElement v e a =
+type alias InputElement v e =
     FormElement v e
     { type': String
     }
 
 {-| A simple text input -}
-basicInput : InputElement v e a -> H.Html
-basicInput =
-    formGroup <| \el ->
-    H.input
-    [ A.type' el.type'
-    , A.id el.id
-    , A.class "form-control"
-    , A.placeholder el.label
-    , A.value <|
-        case el.value.value of
-            Just v -> el.encoder v
-            Nothing -> el.value.userInput
-    , E.on "input" E.targetValue <| \str ->
-        el.onValue
-        { userInput = str
-        , value = el.decoder str
-        }
-    ] []
+basicInput : InputElement v e -> H.Html
+basicInput iel =
+    formGroup iel.element <|
+        let el = iel.element
+        in H.input
+            [ A.type' iel.props.type'
+            , A.id el.id
+            , A.class "form-control"
+            , A.placeholder el.label
+            , A.value <|
+                case el.value.value of
+                    Just v -> iel.encoder v
+                    Nothing -> el.value.userInput
+            , E.on "input" E.targetValue <| \str ->
+                el.onValue
+                { userInput = str
+                , value = iel.decoder str
+                }
+            ] []
 
 {-| A textarea -}
-textArea : Element String e {} -> H.Html
+textArea : Element String e -> H.Html
 textArea el =
-    let handle e =
+    let handle =
             H.textarea
-           [ A.id e.id
+           [ A.id el.id
            , A.class "form-control"
-           , A.placeholder e.label
+           , A.placeholder el.label
            , E.on "input" E.targetValue <| \str ->
-                e.onValue { userInput = str, value = Ok str }
+                el.onValue { userInput = str, value = Ok str }
            ]
            [ text <|
                 case el.value.value of
                     Just v -> v
                     Nothing -> el.value.userInput
            ]
-    in formGroup handle el
+    in formGroup el handle
 
 {-| A simple text input -}
-textInput : Element String e {} -> H.Html
+textInput : Element String e -> H.Html
 textInput el =
-    basicInput <|
-    let el1 = { el | decoder = Ok }
-        el2 = { el1 | encoder = identity }
-        el3 = { el2 | type' = "text" }
-    in el3
+    basicInput
+    { element = el
+    , props = { type' = "text" }
+    , decoder = Ok
+    , encoder = identity
+    }
 
 {-| A simple password input -}
-passwordInput : Element String e {} -> H.Html
+passwordInput : Element String e -> H.Html
 passwordInput el =
-    basicInput <|
-    let el1 = { el | decoder = Ok }
-        el2 = { el1 | encoder = identity}
-        el3 = { el2 | type' = "password" }
-    in el3
+    basicInput
+    { element = el
+    , props = { type' = "password" }
+    , decoder = Ok
+    , encoder = identity
+    }
 
 {-| A simple int input -}
-intInput : Element Int String {} -> H.Html
+intInput : Element Int String -> H.Html
 intInput el =
-    basicInput <|
-    let el1 = { el | decoder = String.toInt }
-        el2 = { el1 | encoder = toString }
-        el3 = { el2 | type' = "number" }
-    in el3
+    basicInput
+    { element = el
+    , props = { type' = "number" }
+    , decoder = String.toInt
+    , encoder = toString
+    }
 
 {-| A simple float input -}
-floatInput : Element Float String {} -> H.Html
+floatInput : Element Float String -> H.Html
 floatInput el =
-    basicInput <|
-    let el1 = { el | decoder = String.toFloat }
-        el2 = { el1 | encoder = toString }
-        el3 = { el2 | type' = "number" }
-    in el3
+    basicInput
+    { element = el
+    , props = { type' = "number" }
+    , decoder = String.toFloat
+    , encoder = toString
+    }
 
 {-| A simple date input -}
-dateInput : Element Date.Date String {} -> H.Html
+dateInput : Element Date.Date String -> H.Html
 dateInput el =
     basicInput <|
     let encode d =
             (String.padLeft 4 '0' <| toString <| Date.year d) ++ "-"
             ++ (String.padLeft 2 '0' <| toString <| dateMonthToInt d) ++ "-"
             ++ (String.padLeft 2 '0' <| toString <| Date.day d)
-        el1 = { el | decoder = Date.fromString }
-        el2 = { el1 | encoder = encode }
-        el3 = { el2 | type' = "date" }
-    in el3
+    in { element = el
+       , props = { type' = "date" }
+       , decoder = Date.fromString
+       , encoder = encode
+       }
 
 dateMonthToInt : Date.Date -> Int
 dateMonthToInt d =
@@ -203,7 +208,7 @@ type alias TimeOfDay =
     }
 
 {-| A simple time input -}
-timeInput : Element TimeOfDay String {} -> H.Html
+timeInput : Element TimeOfDay String -> H.Html
 timeInput el =
     basicInput <|
     let encode t =
@@ -216,13 +221,14 @@ timeInput el =
                     String.toInt minStr `Result.andThen` \min ->
                     Ok { hour = hour, minute = min }
                 _ -> Err <| "Invalid date: " ++ str
-        el1 = { el | decoder = decode }
-        el2 = { el1 | encoder = encode }
-        el3 = { el2 | type' = "time" }
-    in el3
+    in { element = el
+       , props = { type' = "time" }
+       , decoder = decode
+       , encoder = encode
+       }
 
 {-| A simple checkbox input -}
-checkBox : Element Bool e {} -> H.Html
+checkBox : Element Bool e -> H.Html
 checkBox el =
     H.div [ A.class ("checkbox" ++ if isNothing el.value.value then " has-error" else "") ]
     [ H.label []
@@ -242,31 +248,32 @@ checkBox el =
     ]
 
 {-| Spec for selectBox -}
-type alias SelectElement v e a =
+type alias SelectElement v e =
     FormElement v e
     { choices: List v
     , displayChoice: v -> String
     }
 
 {-| A simple dropdown -}
-selectBox : SelectElement v e {} -> H.Html
-selectBox =
-    formGroup <| \el ->
-    let opts =
-            flip List.map el.choices <| \ch ->
+selectBox : SelectElement v e -> H.Html
+selectBox sel =
+    formGroup sel.element <|
+    let el = sel.element
+        opts =
+            flip List.map sel.props.choices <| \ch ->
             let valAttr =
-                    A.value (el.encoder ch)
+                    A.value (sel.encoder ch)
                 rest =
                     if Just ch == el.value.value
                     then [A.selected True]
                     else []
-            in H.option (valAttr :: rest) [ text <| el.displayChoice ch ]
+            in H.option (valAttr :: rest) [ text <| sel.props.displayChoice ch ]
     in H.select
         [ A.id el.id
         , A.class "form-control"
         , E.on "change" E.targetValue <| \str ->
             el.onValue
             { userInput = str
-            , value = el.decoder str
+            , value = sel.decoder str
             }
         ] opts
