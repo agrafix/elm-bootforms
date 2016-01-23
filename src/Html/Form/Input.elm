@@ -89,10 +89,11 @@ formGroup el view =
 {-| Spec for an input with a type -}
 type alias InputElement v e =
     FormElement v e
-    { type': String
+    { type' : String
+    , extraClasses : List String
     }
 
-{-| A simple text input -}
+{-| A simple input -}
 basicInput : InputElement v e -> H.Html
 basicInput iel =
     formGroup iel.element <|
@@ -100,7 +101,7 @@ basicInput iel =
         in H.input
             [ A.type' iel.props.type'
             , A.id el.id
-            , A.class "form-control"
+            , A.class ("form-control " ++ String.join " " iel.props.extraClasses)
             , A.placeholder el.label
             , A.value <|
                 case el.value.value of
@@ -136,7 +137,7 @@ textInput : Element String e -> H.Html
 textInput el =
     basicInput
     { element = el
-    , props = { type' = "text" }
+    , props = { type' = "text", extraClasses = [] }
     , decoder = Ok
     , encoder = identity
     }
@@ -146,7 +147,7 @@ passwordInput : Element String e -> H.Html
 passwordInput el =
     basicInput
     { element = el
-    , props = { type' = "password" }
+    , props = { type' = "password", extraClasses = [] }
     , decoder = Ok
     , encoder = identity
     }
@@ -156,7 +157,7 @@ intInput : Element Int String -> H.Html
 intInput el =
     basicInput
     { element = el
-    , props = { type' = "number" }
+    , props = { type' = "number", extraClasses = ["bootforms-int"] }
     , decoder = String.toInt
     , encoder = toString
     }
@@ -166,7 +167,7 @@ floatInput : Element Float String -> H.Html
 floatInput el =
     basicInput
     { element = el
-    , props = { type' = "number" }
+    , props = { type' = "number", extraClasses = ["bootforms-float"] }
     , decoder = String.toFloat
     , encoder = toString
     }
@@ -180,7 +181,7 @@ dateInput el =
             ++ (String.padLeft 2 '0' <| toString <| dateMonthToInt d) ++ "-"
             ++ (String.padLeft 2 '0' <| toString <| Date.day d)
     in { element = el
-       , props = { type' = "text" }
+       , props = { type' = "text", extraClasses = ["bootforms-date"] }
        , decoder = Date.fromString
        , encoder = encode
        }
@@ -220,9 +221,9 @@ timeInput el =
                     String.toInt hourStr `Result.andThen` \hour ->
                     String.toInt minStr `Result.andThen` \min ->
                     Ok { hour = hour, minute = min }
-                _ -> Err <| "Invalid date: " ++ str
+                _ -> Err <| "Invalid time: " ++ str
     in { element = el
-       , props = { type' = "text" }
+       , props = { type' = "text", extraClasses = ["bootforms-time"] }
        , decoder = decode
        , encoder = encode
        }
