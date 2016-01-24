@@ -4,21 +4,23 @@ This package tries to provide a very simple and powerful interface to HTML(5) fo
 
 ## Docs
 
-See [agrafix/elm-bootforms](http://package.elm-lang.org/packages/agrafix/elm-bootforms/1.0.0/) on the central elm package repo.
+See [agrafix/elm-bootforms](http://package.elm-lang.org/packages/agrafix/elm-bootforms/latest/) on the central elm package repo.
 
 ## Example
 
 ```elm
-foo : H.Html
-foo =
+foo : Address Action -> Model -> H.Html
+foo addr m =
     textInput
-    { id: "foo"
-    , label: "The foo field"
-    , helpBlock: Nothing
-    , value: ""
-    , hasError: False
-    , onValue: \val -> Signal.message addr (SetValue val)
-    , onError: \err -> Signal.message addr (SetError err)
+    { id = "username"
+    , label = "Benutzername or Email"
+    , helpBlock = Nothing
+    , value = stringFormVal m.usernameOrEmail
+    , onValue = \val ->
+        Signal.message addr <|
+        case val.value of
+            Ok x -> SetLogin x
+            Err _ -> Nop
     }
 ```
 
