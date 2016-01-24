@@ -220,8 +220,10 @@ timeInput el =
                 [hourStr, minStr] ->
                     String.toInt hourStr `Result.andThen` \hour ->
                     String.toInt minStr `Result.andThen` \min ->
-                    Ok { hour = hour, minute = min }
-                _ -> Err <| "Invalid time: " ++ str
+                    if hour < 0 || hour > 23 || min < 0 || min > 59
+                    then Err <| "Invalid time: " ++ str
+                    else Ok { hour = hour, minute = min }
+                _ -> Err <| "Ill formatted time: " ++ str
     in { element = el
        , props = { type' = "text", extraClasses = ["bootforms-time"] }
        , decoder = decode
