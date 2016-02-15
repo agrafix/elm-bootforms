@@ -36,20 +36,20 @@ import Html.Events as E
 import Html exposing (text)
 
 {-| The input string of the user and the parsed value -}
-type alias FormValue v =
+type alias FormValue e v =
     { userInput : String
-    , value : v
+    , value : Result e v
     }
 
 {-| Generate a FormValue for textual input boxes w/o validation -}
-stringFormVal : String -> FormValue (Maybe String)
+stringFormVal : String -> FormValue e String
 stringFormVal str =
     { userInput = str
-    , value = Just str
+    , value = Ok str
     }
 
 {-| Generate a FormValue for textual input boxes w/o validation -}
-mayStringFormVal : Maybe String -> FormValue (Maybe String)
+mayStringFormVal : Maybe String -> FormValue e String
 mayStringFormVal = stringFormVal << Maybe.withDefault ""
 
 {-| All inputs will be defined by this basic structure -}
@@ -57,28 +57,27 @@ type alias Element v e =
     { id: String
     , label: String
     , helpBlock: Maybe String
-    , value: FormValue (Maybe v)
-    , onValue: FormValue (Result e v) -> Signal.Message
+    , value: FormValue e v
+    , onValue: FormValue e v -> Signal.Message
     }
 
-{-| An element with de and encoder -}
+{-| An element with a decoder -}
 type alias FormElement v e a =
     { element: Element v e
     , props: a
     , decoder: String -> Result e v
-    , encoder: v -> String
     }
 
-isNothing : Maybe v -> Bool
-isNothing r =
+isError : Result a b -> Bool
+isError r =
     case r of
-        Nothing -> True
-        Just _ -> False
+        Err _ -> True
+        Ok _ -> False
 
 {-| Build your own input element -}
 formGroup : Element v e -> H.Html -> H.Html
 formGroup el view =
-    H.div [ A.class ("form-group" ++ if isNothing el.value.value then " has-error" else "") ]
+    H.div [ A.class ("form-group" ++ if isError el.value.value then " has-error" else "") ]
     [ H.label [ A.for el.id ] [ text el.label ]
     , view
     , case el.helpBlock of
@@ -103,10 +102,7 @@ basicInput iel =
             , A.id el.id
             , A.class ("form-control " ++ String.join " " iel.props.extraClasses)
             , A.placeholder el.label
-            , A.value <|
-                case el.value.value of
-                    Just v -> iel.encoder v
-                    Nothing -> el.value.userInput
+            , A.value el.value.userInput
             , E.on "input" E.targetValue <| \str ->
                 el.onValue
                 { userInput = str
@@ -125,10 +121,7 @@ textArea el =
            , E.on "input" E.targetValue <| \str ->
                 el.onValue { userInput = str, value = Ok str }
            ]
-           [ text <|
-                case el.value.value of
-                    Just v -> v
-                    Nothing -> el.value.userInput
+           [ text el.value.userInput
            ]
     in formGroup el handle
 
@@ -139,7 +132,6 @@ textInput el =
     { element = el
     , props = { type' = "text", extraClasses = [] }
     , decoder = Ok
-    , encoder = identity
     }
 
 {-| A simple password input -}
@@ -149,7 +141,6 @@ passwordInput el =
     { element = el
     , props = { type' = "password", extraClasses = [] }
     , decoder = Ok
-    , encoder = identity
     }
 
 {-| A simple int input -}
@@ -159,7 +150,6 @@ intInput el =
     { element = el
     , props = { type' = "number", extraClasses = ["bootforms-int"] }
     , decoder = String.toInt
-    , encoder = toString
     }
 
 {-| A simple float input -}
@@ -169,38 +159,16 @@ floatInput el =
     { element = el
     , props = { type' = "number", extraClasses = ["bootforms-float"] }
     , decoder = String.toFloat
-    , encoder = toString
     }
 
 {-| A simple date input -}
 dateInput : Element Date.Date String -> H.Html
 dateInput el =
-    basicInput <|
-    let encode d =
-            (String.padLeft 4 '0' <| toString <| Date.year d) ++ "-"
-            ++ (String.padLeft 2 '0' <| toString <| dateMonthToInt d) ++ "-"
-            ++ (String.padLeft 2 '0' <| toString <| Date.day d)
-    in { element = el
-       , props = { type' = "text", extraClasses = ["bootforms-date"] }
-       , decoder = Date.fromString
-       , encoder = encode
-       }
-
-dateMonthToInt : Date.Date -> Int
-dateMonthToInt d =
-    case Date.month d of
-        Date.Jan -> 1
-        Date.Feb -> 2
-        Date.Mar -> 3
-        Date.Apr -> 4
-        Date.May -> 5
-        Date.Jun -> 6
-        Date.Jul -> 7
-        Date.Aug -> 8
-        Date.Sep -> 9
-        Date.Oct -> 10
-        Date.Nov -> 11
-        Date.Dec -> 12
+    basicInput
+    { element = el
+    , props = { type' = "text", extraClasses = ["bootforms-date"] }
+    , decoder = Date.fromString
+    }
 
 {-| Time of day -}
 type alias TimeOfDay =
@@ -212,10 +180,7 @@ type alias TimeOfDay =
 timeInput : Element TimeOfDay String -> H.Html
 timeInput el =
     basicInput <|
-    let encode t =
-            (String.padLeft 2 '0' <| toString <| t.hour) ++ ":"
-            ++ (String.padLeft 2 '0' <| toString <| t.minute)
-        decode str =
+    let decode str =
             case String.split ":" str of
                 [hourStr, minStr] ->
                     String.toInt hourStr `Result.andThen` \hour ->
@@ -227,18 +192,17 @@ timeInput el =
     in { element = el
        , props = { type' = "text", extraClasses = ["bootforms-time"] }
        , decoder = decode
-       , encoder = encode
        }
 
 {-| A simple checkbox input -}
 checkBox : Element Bool e -> H.Html
 checkBox el =
-    H.div [ A.class ("checkbox" ++ if isNothing el.value.value then " has-error" else "") ]
+    H.div [ A.class ("checkbox" ++ if isError el.value.value then " has-error" else "") ]
     [ H.label []
         [ H.input
             [ A.type' "checkbox"
             , A.id el.id
-            , A.checked (Maybe.withDefault False el.value.value)
+            , A.checked (Result.withDefault False el.value.value)
             , E.on "change" E.targetChecked <| \cb ->
                 el.onValue { userInput = if cb then "True" else "False", value = Ok cb }
             ]
@@ -255,6 +219,7 @@ type alias SelectElement v e =
     FormElement v e
     { choices: List v
     , displayChoice: v -> String
+    , choiceValue: v -> String
     }
 
 {-| A simple dropdown -}
@@ -265,9 +230,9 @@ selectBox sel =
         opts =
             flip List.map sel.props.choices <| \ch ->
             let valAttr =
-                    A.value (sel.encoder ch)
+                    A.value (sel.props.choiceValue ch)
                 rest =
-                    if Just ch == el.value.value
+                    if Ok ch == el.value.value
                     then [A.selected True]
                     else []
             in H.option (valAttr :: rest) [ text <| sel.props.displayChoice ch ]
