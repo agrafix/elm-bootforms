@@ -7,7 +7,6 @@ module Html.Form.Input.Suggest
 @docs SuggestiveInput, suggestiveTextInput
 -}
 
-import Date
 import Fuzzy as F
 import Html as H
 import Html exposing (text)
@@ -28,7 +27,6 @@ type alias SuggestiveInput e =
 {-| A suggestive input field -}
 suggestiveTextInput : SuggestiveInput e -> H.Html
 suggestiveTextInput sel =
-    I.formGroup sel.element <|
     let el = sel.element
         val = el.value
         inLen = String.length el.value.userInput
