@@ -1,12 +1,12 @@
 module Html.Form.Input
-    ( FormValue
+    ( FormValue, FormValueAction
     , Element, FormElement, formGroup
     , textInput, passwordInput, intInput, floatInput
     , dateInput, TimeOfDay, timeInput
     , checkBox
     , textArea
     , SelectElement, selectBox
-    , InputElement, basicInput
+    , InputElement, basicInput, basicInputRaw
     , stringFormVal, mayStringFormVal, emptyFormVal
     , getFormValue, getFormValueDef, validFormValue
     ) where
@@ -14,7 +14,7 @@ module Html.Form.Input
 It also provides automatic conversion of textual input to more useful types
 
 # Form input
-@docs FormValue, getFormValue, getFormValueDef, validFormValue, stringFormVal, mayStringFormVal, emptyFormVal
+@docs FormValue, FormValueAction, getFormValue, getFormValueDef, validFormValue, stringFormVal, mayStringFormVal, emptyFormVal
 
 # Default input element structure
 @docs Element, FormElement
@@ -23,12 +23,11 @@ It also provides automatic conversion of textual input to more useful types
 @docs textInput, passwordInput, intInput, floatInput, dateInput, TimeOfDay, timeInput, checkBox, SelectElement, selectBox, textArea
 
 # Custom input elements
-@docs InputElement, basicInput
+@docs InputElement, basicInput, basicInputRaw
 
 # Custom form groups
 @docs formGroup
 -}
-
 import Date
 import Html as H
 import Html exposing (text)
@@ -37,6 +36,9 @@ import Html.Events as E
 import Json.Decode as Json
 import String
 import Time
+
+{-| An action to be applied to a form value -}
+type alias FormValueAction e v = FormValue e v -> FormValue e v
 
 {-| The input string of the user and the parsed value -}
 type alias FormValue e v =
@@ -67,7 +69,7 @@ type alias Element v e =
     , label: String
     , helpBlock: Maybe String
     , value: FormValue e v
-    , onValue: FormValue e v -> Signal.Message
+    , onValue: FormValueAction e v -> Signal.Message
     }
 
 {-| An element with a decoder -}
@@ -75,6 +77,7 @@ type alias FormElement v e a =
     { element: Element v e
     , props: a
     , decoder: String -> Result e v
+    , autoBlur: Bool
     }
 
 isError : Result a b -> Bool
@@ -101,33 +104,37 @@ type alias InputElement v e =
     , extraClasses : List String
     }
 
-focusHandlers : (FormValue e v -> Signal.Message) -> FormValue e v -> List H.Attribute
-focusHandlers onValue val =
+focusHandlers : Bool -> (FormValueAction e v -> Signal.Message) -> List H.Attribute
+focusHandlers autoBlur onValue =
     [ E.on "focus" Json.value <| \_ ->
-        onValue { val | focused = True }
+        onValue <| \val -> { val | focused = True }
     , E.on "blur" Json.value <| \_ ->
-        onValue { val | focused = False }
+        onValue <| \val -> { val | focused = not autoBlur }
     ]
+
+{-| A simple input not grouped yet -}
+basicInputRaw : InputElement v e -> H.Html
+basicInputRaw iel =
+  let el = iel.element
+      val = el.value
+  in flip H.input [] <|
+       [ A.type' iel.props.type'
+       , A.id el.id
+       , A.class ("form-control " ++ String.join " " iel.props.extraClasses)
+       , A.placeholder el.label
+       , A.value val.userInput
+       , E.on "input" E.targetValue <| \str ->
+           el.onValue <| \curVal ->
+           { curVal
+              | userInput = str
+              , value = iel.decoder str
+           }
+       ] ++ (focusHandlers iel.autoBlur el.onValue)
 
 {-| A simple input -}
 basicInput : InputElement v e -> H.Html
 basicInput iel =
-    formGroup iel.element <|
-        let el = iel.element
-            val = el.value
-        in flip H.input [] <|
-            [ A.type' iel.props.type'
-            , A.id el.id
-            , A.class ("form-control " ++ String.join " " iel.props.extraClasses)
-            , A.placeholder el.label
-            , A.value val.userInput
-            , E.on "input" E.targetValue <| \str ->
-                el.onValue
-                { val
-                    | userInput = str
-                    , value = iel.decoder str
-                }
-            ] ++ (focusHandlers el.onValue val)
+    formGroup iel.element (basicInputRaw iel)
 
 {-| A textarea -}
 textArea : Element String e -> H.Html
@@ -139,12 +146,12 @@ textArea el =
             , A.class "form-control"
             , A.placeholder el.label
             , E.on "input" E.targetValue <| \str ->
-                el.onValue
-                { val
+                el.onValue <| \curVal ->
+                { curVal
                     | userInput = str
                     , value = Ok str
                 }
-            ] ++ (focusHandlers el.onValue val)
+            ] ++ (focusHandlers True el.onValue)
     in formGroup el handle
 
 {-| A simple text input -}
@@ -154,6 +161,7 @@ textInput el =
     { element = el
     , props = { type' = "text", extraClasses = [] }
     , decoder = Ok
+    , autoBlur = True
     }
 
 {-| A simple password input -}
@@ -163,6 +171,7 @@ passwordInput el =
     { element = el
     , props = { type' = "password", extraClasses = [] }
     , decoder = Ok
+    , autoBlur = True
     }
 
 {-| A simple int input -}
@@ -172,6 +181,7 @@ intInput el =
     { element = el
     , props = { type' = "number", extraClasses = ["bootforms-int"] }
     , decoder = String.toInt
+    , autoBlur = True
     }
 
 {-| A simple float input -}
@@ -181,6 +191,7 @@ floatInput el =
     { element = el
     , props = { type' = "number", extraClasses = ["bootforms-float"] }
     , decoder = String.toFloat
+    , autoBlur = True
     }
 
 {-| A simple date input -}
@@ -190,6 +201,7 @@ dateInput el =
     { element = el
     , props = { type' = "text", extraClasses = ["bootforms-date"] }
     , decoder = Date.fromString
+    , autoBlur = True
     }
 
 {-| Time of day -}
@@ -214,6 +226,7 @@ timeInput el =
     in { element = el
        , props = { type' = "text", extraClasses = ["bootforms-time"] }
        , decoder = decode
+       , autoBlur = True
        }
 
 {-| A simple checkbox input -}
@@ -226,9 +239,8 @@ checkBox el =
             , A.id el.id
             , A.checked (Result.withDefault False el.value.value)
             , E.on "change" E.targetChecked <| \cb ->
-                let v = el.value
-                in el.onValue { v | userInput = if cb then "True" else "False", value = Ok cb }
-            ] ++ (focusHandlers el.onValue el.value)
+                el.onValue <| \curVal -> { curVal | userInput = if cb then "True" else "False", value = Ok cb }
+            ] ++ (focusHandlers True el.onValue)
         , text (" " ++ el.label)
         ]
     , case el.helpBlock of
@@ -263,12 +275,12 @@ selectBox sel =
         [ A.id el.id
         , A.class "form-control"
         , E.on "change" E.targetValue <| \str ->
-            el.onValue
-            { val
+            el.onValue <| \curVal ->
+            { curVal
                 | userInput = str
                 , value = sel.decoder str
             }
-        ] ++ (focusHandlers el.onValue val)
+        ] ++ (focusHandlers sel.autoBlur el.onValue)
 
 
 {-| Check if the given FormValue contains a valid value -}

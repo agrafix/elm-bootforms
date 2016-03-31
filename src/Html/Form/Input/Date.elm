@@ -13,6 +13,7 @@ module Html.Form.Input.Date
 
 import Date as D
 import Date.Core as D
+import Date.Field as D
 import Html.Form.Input exposing (..)
 import Html as H
 import Html exposing (text)
@@ -20,6 +21,7 @@ import Html.Attributes as A
 import Html.Events as E
 import List as L
 import List.Split as L
+import Json.Decode as Json
 
 {-| Spec for date picker input -}
 type alias DatePickerInput e =
@@ -62,15 +64,23 @@ displayMonthGerman m =
 {-| An input field that shows a date picker below -}
 datePickerInput : DatePickerInput e -> H.Html
 datePickerInput dpi =
+    formGroup dpi.element <|
     let el = dpi.element
         val = el.value
+        apply d =
+            el.onValue <| \curVal ->
+            { curVal
+                | userInput = dpi.props.encoder d
+                , value = Ok d
+            }
     in H.div []
-         [ basicInput
+         [ basicInputRaw
              { element = el
              , props = { type' = "text", extraClasses = ["ag-datepicker"] }
              , decoder = dpi.decoder
+             , autoBlur = False
              }
-         , monthTable dpi.props.displayDay dpi.props.displayMonth <|
+         , monthTable apply dpi.props.displayDay dpi.props.displayMonth <|
              getFormValueDef dpi.props.defaultDate val
          ]
 
@@ -79,7 +89,7 @@ monthGrid now =
     let first = D.toFirstOfMonth now
         dayOfWeekFirst = D.isoDayOfWeek (D.dayOfWeek first) - 1
         last = D.lastOfMonthDate now
-        lastDay = D.day now
+        lastDay = D.day last
         dayOfWeekLast = D.isoDayOfWeek (D.dayOfWeek last) - 1
         lastRowTil = 6 - dayOfWeekLast
         firstRowTil = dayOfWeekFirst
@@ -89,8 +99,8 @@ monthGrid now =
             ++ L.repeat lastRowTil Nothing
     in L.chunksOfLeft 7 fullList
 
-monthTable : (D.Day -> String) -> (D.Month -> String) -> D.Date -> H.Html
-monthTable displayDay displayMonth now =
+monthTable : (D.Date -> Signal.Message) -> (D.Day -> String) -> (D.Month -> String) -> D.Date -> H.Html
+monthTable changeDate displayDay displayMonth now =
     let month = displayMonth (D.month now)
         day = D.day now
         totalDays = D.daysInMonthDate now
@@ -108,21 +118,29 @@ monthTable displayDay displayMonth now =
           case d of
             Nothing -> H.td [] []
             Just i ->
-              H.td [ A.class (if i == day then "current-day" else "") ]
-              [ text (toString i) ]
-        navButton side =
-           H.button [ A.class "btn btn-default btn-xs" ]
+              H.td
+              [ A.class ("ag-cal-cell " ++ (if i == day then "info ag-cal-cell-active" else ""))
+              , E.on "click" Json.value <| \_ -> changeDate (D.fieldToDateClamp (D.DayOfMonth i) now)
+              ]
+              [ text (toString i)
+              ]
+        navButton side f =
+           H.button
+              [ A.class ("btn btn-default btn-xs ag-cal-nav-btn ag-cal-nav-btn-" ++ side)
+              , E.on "click" Json.value <| \_ ->
+                changeDate (f now)
+              ]
               [ H.span [ A.class ("glyphicon glyphicon-chevron-" ++ side) ] []
               ]
-    in H.div [ A.class "ag-datepicker" ]
+    in H.div [ A.class "ag-datepicker-table" ]
        [ H.div [ A.class "row" ]
            [ H.div [ A.class "col-xs-3" ]
-               [ navButton "left" ]
+               [ navButton "left" D.lastOfPrevMonthDate ]
            , H.div [ A.class "col-xs-6" ]
-               [ H.h3 [] [ text month ] ]
+               [ H.h3 [] [ text month, text " ", text (toString <| D.year now) ] ]
            , H.div [ A.class "col-xs-3" ]
-               [ navButton "right" ]
+               [ navButton "right" D.firstOfNextMonthDate ]
            ]
-       , H.table []
-          ( H.tr [] dayHeaders :: calRows )
+       , H.table [ A.class "table table-bordered table-condensed"]
+          [ H.tbody [] ( H.tr [] dayHeaders :: calRows ) ]
        ]
