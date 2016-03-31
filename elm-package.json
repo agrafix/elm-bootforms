@@ -8,12 +8,15 @@
     ],
     "exposed-modules": [
         "Html.Form.Input",
-        "Html.Form.Input.Suggest"
+        "Html.Form.Input.Suggest",
+        "Html.Form.Input.Date"
     ],
     "dependencies": {
         "elm-lang/core": "2.1.0 <= v < 4.0.0",
         "evancz/elm-html": "3.0.0 <= v < 5.0.0",
-        "tripokey/elm-fuzzy": "5.0.0 <= v < 6.0.0"
+        "tripokey/elm-fuzzy": "5.0.0 <= v < 6.0.0",
+        "rluiten/elm-date-extra": "3.0.0 <= v < 4.0.0",
+        "circuithub/elm-list-split": "1.0.1 <= v < 2.0.0"
     },
     "elm-version": "0.15.1 <= v < 0.17.0"
 }
