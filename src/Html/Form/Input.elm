@@ -7,7 +7,7 @@ module Html.Form.Input
     , textArea
     , SelectElement, selectBox
     , InputElement, basicInput
-    , stringFormVal, mayStringFormVal
+    , stringFormVal, mayStringFormVal, emptyFormVal
     ) where
 {-| This module will help generating good looking forms using the twitter bootstrap framework
 
@@ -18,7 +18,7 @@ module Html.Form.Input
 @docs textInput, passwordInput, intInput, floatInput, dateInput, TimeOfDay, timeInput, checkBox, SelectElement, selectBox, textArea
 
 # Helper functions
-@docs stringFormVal, mayStringFormVal
+@docs stringFormVal, mayStringFormVal, emptyFormVal
 
 # Custom input elements
 @docs InputElement, basicInput
@@ -28,24 +28,31 @@ module Html.Form.Input
 -}
 
 import Date
-import String
-import Time
 import Html as H
+import Html exposing (text)
 import Html.Attributes as A
 import Html.Events as E
-import Html exposing (text)
+import Json.Decode as Json
+import String
+import Time
 
 {-| The input string of the user and the parsed value -}
 type alias FormValue e v =
     { userInput : String
     , value : Result e v
+    , focused : Bool
     }
+
+{-| An empty form value -}
+emptyFormVal : FormValue String v
+emptyFormVal = { userInput = "", value = Err "No input", focused = False }
 
 {-| Generate a FormValue for textual input boxes w/o validation -}
 stringFormVal : String -> FormValue e String
 stringFormVal str =
     { userInput = str
     , value = Ok str
+    , focused = False
     }
 
 {-| Generate a FormValue for textual input boxes w/o validation -}
@@ -92,37 +99,50 @@ type alias InputElement v e =
     , extraClasses : List String
     }
 
+focusHandlers : (FormValue e v -> Signal.Message) -> FormValue e v -> List H.Attribute
+focusHandlers onValue val =
+    [ E.on "focus" Json.value <| \_ ->
+        onValue { val | focused = True }
+    , E.on "blur" Json.value <| \_ ->
+        onValue { val | focused = False }
+    ]
+
 {-| A simple input -}
 basicInput : InputElement v e -> H.Html
 basicInput iel =
     formGroup iel.element <|
         let el = iel.element
-        in H.input
+            val = el.value
+        in flip H.input [] <|
             [ A.type' iel.props.type'
             , A.id el.id
             , A.class ("form-control " ++ String.join " " iel.props.extraClasses)
             , A.placeholder el.label
-            , A.value el.value.userInput
+            , A.value val.userInput
             , E.on "input" E.targetValue <| \str ->
                 el.onValue
-                { userInput = str
-                , value = iel.decoder str
+                { val
+                    | userInput = str
+                    , value = iel.decoder str
                 }
-            ] []
+            ] ++ (focusHandlers el.onValue val)
 
 {-| A textarea -}
 textArea : Element String e -> H.Html
 textArea el =
-    let handle =
-            H.textarea
-           [ A.id el.id
-           , A.class "form-control"
-           , A.placeholder el.label
-           , E.on "input" E.targetValue <| \str ->
-                el.onValue { userInput = str, value = Ok str }
-           ]
-           [ text el.value.userInput
-           ]
+    let val = el.value
+        handle =
+            flip H.textarea [ text val.userInput ] <|
+            [ A.id el.id
+            , A.class "form-control"
+            , A.placeholder el.label
+            , E.on "input" E.targetValue <| \str ->
+                el.onValue
+                { val
+                    | userInput = str
+                    , value = Ok str
+                }
+            ] ++ (focusHandlers el.onValue val)
     in formGroup el handle
 
 {-| A simple text input -}
@@ -199,14 +219,14 @@ checkBox : Element Bool e -> H.Html
 checkBox el =
     H.div [ A.class ("checkbox" ++ if isError el.value.value then " has-error" else "") ]
     [ H.label []
-        [ H.input
+        [ flip H.input [] <|
             [ A.type' "checkbox"
             , A.id el.id
             , A.checked (Result.withDefault False el.value.value)
             , E.on "change" E.targetChecked <| \cb ->
-                el.onValue { userInput = if cb then "True" else "False", value = Ok cb }
-            ]
-            []
+                let v = el.value
+                in el.onValue { v | userInput = if cb then "True" else "False", value = Ok cb }
+            ] ++ (focusHandlers el.onValue el.value)
         , text (" " ++ el.label)
         ]
     , case el.helpBlock of
@@ -227,21 +247,23 @@ selectBox : SelectElement v e -> H.Html
 selectBox sel =
     formGroup sel.element <|
     let el = sel.element
+        val = el.value
         opts =
             flip List.map sel.props.choices <| \ch ->
             let valAttr =
                     A.value (sel.props.choiceValue ch)
                 rest =
-                    if Ok ch == el.value.value
+                    if Ok ch == val.value
                     then [A.selected True]
                     else []
             in H.option (valAttr :: rest) [ text <| sel.props.displayChoice ch ]
-    in H.select
+    in flip H.select opts <|
         [ A.id el.id
         , A.class "form-control"
         , E.on "change" E.targetValue <| \str ->
             el.onValue
-            { userInput = str
-            , value = sel.decoder str
+            { val
+                | userInput = str
+                , value = sel.decoder str
             }
-        ] opts
+        ] ++ (focusHandlers el.onValue val)
