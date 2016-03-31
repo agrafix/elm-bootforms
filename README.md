@@ -9,18 +9,57 @@ See [agrafix/elm-bootforms](http://package.elm-lang.org/packages/agrafix/elm-boo
 ## Example
 
 ```elm
-foo : Address Action -> Model -> H.Html
-foo addr m =
-    textInput
-    { id = "username"
-    , label = "Benutzername or Email"
-    , helpBlock = Nothing
-    , value = stringFormVal m.usernameOrEmail
-    , onValue = \val ->
-        Signal.message addr <|
-        case val.value of
-            Ok x -> SetLogin x
-            Err _ -> Nop
+import Date
+import Html.Form.Input as I
+
+type alias Model =
+    { date: FormValue Date.Date
+    , name: FormValue String
+    }
+
+type Action
+    = Nop
+    | SetDate (FormValue Date.Date)
+    | SetName (FormValue String)
+
+init : (Model, Effects Action)
+init =
+    (
+        { date = { userInput = "", value = Err "no date", focused = False }
+        , name = I.stringFormVal ""
+        }
+    , Effects.none
+    )
+
+noFx : Model -> (Model, Effects Action)
+noFx m = (m, Effects.none)
+
+update : Action -> Model -> (Model, Effects Action)
+update a m =
+    case a of
+        Nop -> noFx m
+        SetDate x -> noFx { m | date = x }
+        SetName x -> noFx { m | name = x }
+
+view : Signal.Address Action -> Model -> H.Html
+view addr =
+    H.lazy <| \m ->
+    H.div []
+    [ H.h2 [] [ text "My super form" ]
+    , I.dateInput
+        { id = "some-date"
+        , label = "Date"
+        , helpBlock = Just "Example: 04.02.2015"
+        , value = m.date
+        , onValue = Signal.message addr << SetDate
+        }
+    , I.textInput
+      { id = "some-name"
+      , label = "The name"
+      , helpBlock = Just "Example: 14:35"
+      , value = m.name
+      , onValue = Signal.message addr << SetDeparture
+      }
     }
 ```
 
