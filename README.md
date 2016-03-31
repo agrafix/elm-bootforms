@@ -13,14 +13,14 @@ import Date
 import Html.Form.Input as I
 
 type alias Model =
-    { date: FormValue Date.Date
-    , name: FormValue String
+    { date: I.FormValue String Date.Date
+    , name: I.FormValue String String
     }
 
 type Action
     = Nop
-    | SetDate (FormValue Date.Date)
-    | SetName (FormValue String)
+    | SetDate (I.FormValueAction String Date.Date)
+    | SetName (I.FormValueAction String String)
 
 init : (Model, Effects Action)
 init =
@@ -38,8 +38,8 @@ update : Action -> Model -> (Model, Effects Action)
 update a m =
     case a of
         Nop -> noFx m
-        SetDate x -> noFx { m | date = x }
-        SetName x -> noFx { m | name = x }
+        SetDate f -> noFx { m | date = f m.date }
+        SetName f -> noFx { m | name = f m.name }
 
 view : Signal.Address Action -> Model -> H.Html
 view addr =
