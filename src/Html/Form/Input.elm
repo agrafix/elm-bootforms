@@ -8,17 +8,19 @@ module Html.Form.Input
     , SelectElement, selectBox
     , InputElement, basicInput
     , stringFormVal, mayStringFormVal, emptyFormVal
+    , getFormValue, getFormValueDef, validFormValue
     ) where
-{-| This module will help generating good looking forms using the twitter bootstrap framework
+{-| This module will help generating good looking forms using the twitter bootstrap framework.
+It also provides automatic conversion of textual input to more useful types
+
+# Form input
+@docs FormValue, getFormValue, getFormValueDef, validFormValue, stringFormVal, mayStringFormVal, emptyFormVal
 
 # Default input element structure
-@docs FormValue, Element, FormElement
+@docs Element, FormElement
 
 # Popular form groups
 @docs textInput, passwordInput, intInput, floatInput, dateInput, TimeOfDay, timeInput, checkBox, SelectElement, selectBox, textArea
-
-# Helper functions
-@docs stringFormVal, mayStringFormVal, emptyFormVal
 
 # Custom input elements
 @docs InputElement, basicInput
@@ -267,3 +269,22 @@ selectBox sel =
                 , value = sel.decoder str
             }
         ] ++ (focusHandlers el.onValue val)
+
+
+{-| Check if the given FormValue contains a valid value -}
+validFormValue : FormValue e t -> Bool
+validFormValue fv =
+    case fv.value of
+      Ok _ -> True
+      Err _ -> False
+
+{-| Read the current form value if available -}
+getFormValue : FormValue e t -> Maybe t
+getFormValue fv =
+    case fv.value of
+      Ok val -> Just val
+      Err _ -> Nothing
+
+{-| Read the current form value or fallback to a default -}
+getFormValueDef : t -> FormValue e t -> t
+getFormValueDef def = Maybe.withDefault def << getFormValue
