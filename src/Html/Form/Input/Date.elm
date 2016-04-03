@@ -10,18 +10,17 @@ module Html.Form.Input.Date
 # Configuration helpers
 @docs displayDayGerman, displayMonthGerman
 -}
-
 import Date as D
 import Date.Core as D
 import Date.Field as D
-import Html.Form.Input exposing (..)
 import Html as H
 import Html exposing (text)
 import Html.Attributes as A
 import Html.Events as E
+import Html.Form.Input exposing (..)
+import Json.Decode as Json
 import List as L
 import List.Split as L
-import Json.Decode as Json
 
 {-| Spec for date picker input -}
 type alias DatePickerInput e =
@@ -67,11 +66,12 @@ datePickerInput dpi =
     formGroup dpi.element <|
     let el = dpi.element
         val = el.value
-        apply d =
+        apply unfocus d =
             el.onValue <| \curVal ->
             { curVal
                 | userInput = dpi.props.encoder d
                 , value = Ok d
+                , focused = not unfocus
             }
     in H.div []
          [ basicInputRaw
@@ -80,8 +80,10 @@ datePickerInput dpi =
              , decoder = dpi.decoder
              , autoBlur = False
              }
-         , monthTable apply dpi.props.displayDay dpi.props.displayMonth <|
-             getFormValueDef dpi.props.defaultDate val
+         , if val.focused
+           then monthTable apply dpi.props.displayDay dpi.props.displayMonth <|
+                getFormValueDef dpi.props.defaultDate val
+           else H.span [] []
          ]
 
 monthGrid : D.Date -> List (List (Maybe Int))
@@ -99,7 +101,7 @@ monthGrid now =
             ++ L.repeat lastRowTil Nothing
     in L.chunksOfLeft 7 fullList
 
-monthTable : (D.Date -> Signal.Message) -> (D.Day -> String) -> (D.Month -> String) -> D.Date -> H.Html
+monthTable : (Bool -> D.Date -> Signal.Message) -> (D.Day -> String) -> (D.Month -> String) -> D.Date -> H.Html
 monthTable changeDate displayDay displayMonth now =
     let month = displayMonth (D.month now)
         day = D.day now
@@ -120,7 +122,7 @@ monthTable changeDate displayDay displayMonth now =
             Just i ->
               H.td
               [ A.class ("ag-cal-cell " ++ (if i == day then "info ag-cal-cell-active" else ""))
-              , E.on "click" Json.value <| \_ -> changeDate (D.fieldToDateClamp (D.DayOfMonth i) now)
+              , E.on "click" Json.value <| \_ -> changeDate True (D.fieldToDateClamp (D.DayOfMonth i) now)
               ]
               [ text (toString i)
               ]
@@ -128,7 +130,7 @@ monthTable changeDate displayDay displayMonth now =
            H.button
               [ A.class ("btn btn-default btn-xs ag-cal-nav-btn ag-cal-nav-btn-" ++ side)
               , E.on "click" Json.value <| \_ ->
-                changeDate (f now)
+                changeDate False (f now)
               ]
               [ H.span [ A.class ("glyphicon glyphicon-chevron-" ++ side) ] []
               ]
