@@ -1,5 +1,5 @@
 {
-    "version": "8.0.0",
+    "version": "9.0.0",
     "summary": "Quickly create forms using bootstrap and elm",
     "repository": "https://github.com/agrafix/elm-bootforms.git",
     "license": "MIT",
