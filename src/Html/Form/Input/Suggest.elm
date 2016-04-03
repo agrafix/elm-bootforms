@@ -11,7 +11,7 @@ module Html.Form.Input.Suggest
 @docs SuggestiveInput, suggestiveTextInput
 -}
 import Char
-import Dict
+import IntDict
 import Fuzzy as F
 import Html as H
 import Html exposing (text)
@@ -29,43 +29,61 @@ type alias SuggestiveInput e =
     , minTyped: Int
     }
 
+type alias SearchEntry =
+    { value : String
+    , indexed : String
+    }
+
 {-| An abstract search index -}
 type SearchIndex
     = SearchIndex
-    { firstCharMap : Dict.Dict Char (List String)
+    { firstCharMap : IntDict.IntDict (List SearchEntry)
     }
+
+{-| Compute the search index key for a search string. Note that the resulting int can not have more then 32 bits!
+ -}
+getIdxKey : String -> Maybe Int
+getIdxKey str =
+    case String.toList str of
+      [] -> Nothing
+      [a] -> Just (Char.toCode a)
+      [a, b] -> Just (Char.toCode a * Char.toCode b * 100)
+      (a :: b :: c :: _) -> Just (Char.toCode a + Char.toCode b * 100 + Char.toCode c * 10000)
 
 {-| Build a search index for a given list of searchable items -}
 makeSearchIndex : List String -> SearchIndex
 makeSearchIndex choices =
     let loop zs =
             case zs of
-              [] -> Dict.empty
-              (x :: xs) ->
-                  case String.uncons x of
-                    Nothing -> loop xs
-                    Just (ch, _) ->
-                        let action =
-                                Dict.update (Char.toLower ch) <| \oldVal ->
-                                case oldVal of
-                                  Nothing -> Just [x]
-                                  Just ys -> Just (x :: ys)
-                        in action (loop xs)
+              [] -> IntDict.empty
+              (xRaw :: xs) ->
+                  let x = String.toLower xRaw
+                      entry = { value = xRaw, indexed = x }
+                  in case getIdxKey x of
+                       Nothing -> loop xs
+                       Just k ->
+                           let action =
+                                   IntDict.update k <| \oldVal ->
+                                   case oldVal of
+                                     Nothing -> Just [entry]
+                                     Just ys -> Just (entry :: ys)
+                           in action (loop xs)
     in SearchIndex
        { firstCharMap = loop choices
        }
 
-fuzzySearch : String -> SearchIndex -> List String
-fuzzySearch needle (SearchIndex idx) =
-    case String.uncons needle of
-      Nothing -> []
-      Just (ch, _) ->
-          case Dict.get (Char.toLower ch) idx.firstCharMap of
-            Nothing -> []
-            Just possible ->
-              List.sortBy (\x -> F.match [] [] needle x |> .score) possible
+fuzzySearch : String -> SearchIndex -> List SearchEntry
+fuzzySearch needleRaw (SearchIndex idx) =
+    let needle = String.toLower needleRaw
+    in case getIdxKey needle of
+         Nothing -> []
+         Just k ->
+             case IntDict.get k idx.firstCharMap of
+               Nothing -> []
+               Just possible ->
+                   List.sortBy (\x -> F.match [] [] needle x.indexed |> .score) possible
 
-{-| A suggestive input field -}
+{-| A suggestive input field. Note that suggestions require at least 3 typed characters -}
 suggestiveTextInput : SuggestiveInput e -> H.Html
 suggestiveTextInput sel =
     I.formGroup sel.element <|
@@ -74,7 +92,8 @@ suggestiveTextInput sel =
         inLen = String.length el.value.userInput
         suggestions =
             if val.focused && inLen >= sel.props.minTyped
-            then List.take (sel.props.maxSuggest) <|
+            then List.map (.value) <|
+                 List.take (sel.props.maxSuggest) <|
                  fuzzySearch el.value.userInput sel.props.choices
             else []
     in H.div []
