@@ -1,11 +1,17 @@
 module Html.Form.Input.Suggest
   ( SuggestiveInput, suggestiveTextInput
+  , SearchIndex, makeSearchIndex
   ) where
 {-| This module implements an input that includes input suggestions
+
+# The search index
+@docs SearchIndex, makeSearchIndex
 
 # The input field
 @docs SuggestiveInput, suggestiveTextInput
 -}
+import Char
+import Dict
 import Fuzzy as F
 import Html as H
 import Html exposing (text)
@@ -18,10 +24,46 @@ import String
 {-| Spec for suggestive input -}
 type alias SuggestiveInput e =
     I.FormElement String e
-    { choices: List String
+    { choices: SearchIndex
     , maxSuggest: Int
     , minTyped: Int
     }
+
+{-| An abstract search index -}
+type SearchIndex
+    = SearchIndex
+    { firstCharMap : Dict.Dict Char (List String)
+    }
+
+{-| Build a search index for a given list of searchable items -}
+makeSearchIndex : List String -> SearchIndex
+makeSearchIndex choices =
+    let loop zs =
+            case zs of
+              [] -> Dict.empty
+              (x :: xs) ->
+                  case String.uncons x of
+                    Nothing -> loop xs
+                    Just (ch, _) ->
+                        let action =
+                                Dict.update (Char.toLower ch) <| \oldVal ->
+                                case oldVal of
+                                  Nothing -> Just [x]
+                                  Just ys -> Just (x :: ys)
+                        in action (loop xs)
+    in SearchIndex
+       { firstCharMap = loop choices
+       }
+
+fuzzySearch : String -> SearchIndex -> List String
+fuzzySearch needle (SearchIndex idx) =
+    case String.uncons needle of
+      Nothing -> []
+      Just (ch, _) ->
+          case Dict.get (Char.toLower ch) idx.firstCharMap of
+            Nothing -> []
+            Just possible ->
+              List.sortBy (\x -> F.match [] [] needle x |> .score) possible
 
 {-| A suggestive input field -}
 suggestiveTextInput : SuggestiveInput e -> H.Html
@@ -33,7 +75,7 @@ suggestiveTextInput sel =
         suggestions =
             if val.focused && inLen >= sel.props.minTyped
             then List.take (sel.props.maxSuggest) <|
-                 List.sortBy (\x -> F.match [] [] el.value.userInput x |> .score) sel.props.choices
+                 fuzzySearch el.value.userInput sel.props.choices
             else []
     in H.div []
         [ I.basicInputRaw
