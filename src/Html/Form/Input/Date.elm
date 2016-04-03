@@ -24,7 +24,7 @@ import List.Split as L
 
 {-| Spec for date picker input -}
 type alias DatePickerInput e =
-    FormElement D.Date e
+    FormElement D.Date e ()
     { displayMonth : D.Month -> String
     , displayDay : D.Day -> String
     , defaultDate : D.Date
@@ -67,7 +67,7 @@ datePickerInput dpi =
     let el = dpi.element
         val = el.value
         apply unfocus d =
-            el.onValue <| \curVal ->
+            el.onValue <| noFx <| \curVal ->
             { curVal
                 | userInput = dpi.props.encoder d
                 , value = Ok d

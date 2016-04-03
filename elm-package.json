@@ -1,5 +1,5 @@
 {
-    "version": "9.0.0",
+    "version": "10.0.0",
     "summary": "Quickly create forms using bootstrap and elm",
     "repository": "https://github.com/agrafix/elm-bootforms.git",
     "license": "MIT",
@@ -9,11 +9,13 @@
     "exposed-modules": [
         "Html.Form.Input",
         "Html.Form.Input.Suggest",
+        "Html.Form.Input.Suggest.External",
         "Html.Form.Input.Date"
     ],
     "dependencies": {
         "circuithub/elm-list-split": "1.0.1 <= v < 2.0.0",
         "elm-lang/core": "2.1.0 <= v < 4.0.0",
+        "evancz/elm-effects": "2.0.0 <= v < 3.0.0",
         "evancz/elm-html": "3.0.0 <= v < 5.0.0",
         "rluiten/elm-date-extra": "3.0.0 <= v < 4.0.0",
         "sgraf812/elm-intdict": "1.4.2 <= v < 2.0.0",

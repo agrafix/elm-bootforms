@@ -1,20 +1,21 @@
 module Html.Form.Input
-    ( FormValue, FormValueAction
+    ( FormValue, FormValueSt, FormValueAction, FormValueActionSt(..)
     , Element, FormElement, formGroup
     , textInput, passwordInput, intInput, floatInput
     , dateInput, TimeOfDay, timeInput
     , checkBox
     , textArea
     , SelectElement, selectBox
-    , InputElement, basicInput, basicInputRaw
+    , InputElement, basicInput, basicInputRaw, basicInputRawEff
     , stringFormVal, mayStringFormVal, emptyFormVal
     , getFormValue, getFormValueDef, validFormValue
+    , noFx, apply, effect, mappedEffect
     ) where
 {-| This module will help generating good looking forms using the twitter bootstrap framework.
 It also provides automatic conversion of textual input to more useful types
 
 # Form input
-@docs FormValue, FormValueAction, getFormValue, getFormValueDef, validFormValue, stringFormVal, mayStringFormVal, emptyFormVal
+@docs FormValue, FormValueSt, FormValueAction, FormValueActionSt, apply, effect, mappedEffect, noFx, getFormValue, getFormValueDef, validFormValue, stringFormVal, mayStringFormVal, emptyFormVal
 
 # Default input element structure
 @docs Element, FormElement
@@ -23,12 +24,13 @@ It also provides automatic conversion of textual input to more useful types
 @docs textInput, passwordInput, intInput, floatInput, dateInput, TimeOfDay, timeInput, checkBox, SelectElement, selectBox, textArea
 
 # Custom input elements
-@docs InputElement, basicInput, basicInputRaw
+@docs InputElement, basicInput, basicInputRaw, basicInputRawEff
 
 # Custom form groups
 @docs formGroup
 -}
 import Date
+import Effects
 import Html as H
 import Html exposing (text)
 import Html.Attributes as A
@@ -38,43 +40,71 @@ import String
 import Time
 
 {-| An action to be applied to a form value -}
-type alias FormValueAction e v = FormValue e v -> FormValue e v
+type alias FormValueAction e v = FormValueActionSt e v ()
+
+{-| An action to be applied to a form value for components with internal state -}
+type FormValueActionSt e v st =
+    FormValueActionSt
+    { action : FormValueSt e v st -> FormValueSt e v st
+    , effect : Effects.Effects (FormValueActionSt e v st)
+    }
+
+{-| Apply an action to a form value -}
+apply : FormValueActionSt e v st -> FormValueSt e v st -> FormValueSt e v st
+apply (FormValueActionSt st) = st.action
+
+{-| Return all side effects of an action to a form value -}
+effect : FormValueActionSt e v st -> Effects.Effects (FormValueActionSt e v st)
+effect (FormValueActionSt st) = st.effect
+
+{-| Return all side effects of an action to a form value and apply a function to wrap them -}
+mappedEffect : (FormValueActionSt e v st -> a) -> FormValueActionSt e v st -> Effects.Effects a
+mappedEffect f = Effects.map f << effect
+
+{-| An effect free form action -}
+noFx : (FormValueSt e v st -> FormValueSt e v st) -> FormValueActionSt e v st
+noFx f = FormValueActionSt { action = f, effect = Effects.none }
 
 {-| The input string of the user and the parsed value -}
-type alias FormValue e v =
+type alias FormValue e v = FormValueSt e v ()
+
+{-| The input string of the user, the parsed value and internal state of the component -}
+type alias FormValueSt e v st =
     { userInput : String
     , value : Result e v
     , focused : Bool
+    , internalState : st
     }
 
 {-| An empty form value -}
-emptyFormVal : FormValue String v
-emptyFormVal = { userInput = "", value = Err "No input", focused = False }
+emptyFormVal : FormValueSt String v ()
+emptyFormVal = { userInput = "", value = Err "No input", focused = False, internalState = () }
 
-{-| Generate a FormValue for textual input boxes w/o validation -}
-stringFormVal : String -> FormValue e String
+{-| Generate a FormValueSt for textual input boxes w/o validation -}
+stringFormVal : String -> FormValueSt e String ()
 stringFormVal str =
     { userInput = str
     , value = Ok str
     , focused = False
+    , internalState = ()
     }
 
-{-| Generate a FormValue for textual input boxes w/o validation -}
-mayStringFormVal : Maybe String -> FormValue e String
+{-| Generate a FormValueSt for textual input boxes w/o validation -}
+mayStringFormVal : Maybe String -> FormValueSt e String ()
 mayStringFormVal = stringFormVal << Maybe.withDefault ""
 
 {-| All inputs will be defined by this basic structure -}
-type alias Element v e =
+type alias Element v e st =
     { id: String
     , label: String
     , helpBlock: Maybe String
-    , value: FormValue e v
-    , onValue: FormValueAction e v -> Signal.Message
+    , value: FormValueSt e v st
+    , onValue: FormValueActionSt e v st -> Signal.Message
     }
 
 {-| An element with a decoder -}
-type alias FormElement v e a =
-    { element: Element v e
+type alias FormElement v e st a =
+    { element: Element v e st
     , props: a
     , decoder: String -> Result e v
     , autoBlur: Bool
@@ -87,7 +117,7 @@ isError r =
         Ok _ -> False
 
 {-| Build your own input element -}
-formGroup : Element v e -> H.Html -> H.Html
+formGroup : Element v e st -> H.Html -> H.Html
 formGroup el view =
     H.div [ A.class ("form-group" ++ if isError el.value.value then " has-error" else "") ]
     [ H.label [ A.for el.id ] [ text el.label ]
@@ -98,46 +128,58 @@ formGroup el view =
     ]
 
 {-| Spec for an input with a type -}
-type alias InputElement v e =
-    FormElement v e
+type alias InputElement v e st =
+    FormElement v e st
     { type' : String
     , extraClasses : List String
     }
 
-focusHandlers : Bool -> (FormValueAction e v -> Signal.Message) -> List H.Attribute
+focusHandlers : Bool -> (FormValueActionSt e v st -> Signal.Message) -> List H.Attribute
 focusHandlers autoBlur onValue =
     [ E.on "focus" Json.value <| \_ ->
-        onValue <| \val -> { val | focused = True }
+        onValue <| noFx <| \val -> { val | focused = True }
     , E.on "blur" Json.value <| \_ ->
-        onValue <| \val -> { val | focused = not autoBlur }
+        onValue <| noFx <| \val -> { val | focused = not autoBlur }
     ]
 
+{-| A simple input not grouped yet emitting an effect -}
+basicInputRawEff :
+    (FormValueSt e v st -> Effects.Effects (FormValueActionSt e v st))
+    -> InputElement v e st
+    -> H.Html
+basicInputRawEff effs iel =
+    let el = iel.element
+        val = el.value
+    in flip H.input [] <|
+           [ A.type' iel.props.type'
+           , A.id el.id
+           , A.class ("form-control " ++ String.join " " iel.props.extraClasses)
+           , A.placeholder el.label
+           , A.value val.userInput
+           , E.on "input" E.targetValue <| \str ->
+               el.onValue <|
+               let action curVal =
+                       { curVal
+                           | userInput = str
+                           , value = iel.decoder str
+                       }
+               in FormValueActionSt
+                  { action = action
+                  , effect = effs <| action val
+                  }
+           ] ++ (focusHandlers iel.autoBlur el.onValue)
+
 {-| A simple input not grouped yet -}
-basicInputRaw : InputElement v e -> H.Html
-basicInputRaw iel =
-  let el = iel.element
-      val = el.value
-  in flip H.input [] <|
-       [ A.type' iel.props.type'
-       , A.id el.id
-       , A.class ("form-control " ++ String.join " " iel.props.extraClasses)
-       , A.placeholder el.label
-       , A.value val.userInput
-       , E.on "input" E.targetValue <| \str ->
-           el.onValue <| \curVal ->
-           { curVal
-              | userInput = str
-              , value = iel.decoder str
-           }
-       ] ++ (focusHandlers iel.autoBlur el.onValue)
+basicInputRaw : InputElement v e st -> H.Html
+basicInputRaw = basicInputRawEff (\_ -> Effects.none)
 
 {-| A simple input -}
-basicInput : InputElement v e -> H.Html
+basicInput : InputElement v e st -> H.Html
 basicInput iel =
     formGroup iel.element (basicInputRaw iel)
 
 {-| A textarea -}
-textArea : Element String e -> H.Html
+textArea : Element String e () -> H.Html
 textArea el =
     let val = el.value
         handle =
@@ -146,7 +188,7 @@ textArea el =
             , A.class "form-control"
             , A.placeholder el.label
             , E.on "input" E.targetValue <| \str ->
-                el.onValue <| \curVal ->
+                el.onValue <| noFx <| \curVal ->
                 { curVal
                     | userInput = str
                     , value = Ok str
@@ -155,7 +197,7 @@ textArea el =
     in formGroup el handle
 
 {-| A simple text input -}
-textInput : Element String e -> H.Html
+textInput : Element String e () -> H.Html
 textInput el =
     basicInput
     { element = el
@@ -165,7 +207,7 @@ textInput el =
     }
 
 {-| A simple password input -}
-passwordInput : Element String e -> H.Html
+passwordInput : Element String e () -> H.Html
 passwordInput el =
     basicInput
     { element = el
@@ -175,7 +217,7 @@ passwordInput el =
     }
 
 {-| A simple int input -}
-intInput : Element Int String -> H.Html
+intInput : Element Int String () -> H.Html
 intInput el =
     basicInput
     { element = el
@@ -185,7 +227,7 @@ intInput el =
     }
 
 {-| A simple float input -}
-floatInput : Element Float String -> H.Html
+floatInput : Element Float String () -> H.Html
 floatInput el =
     basicInput
     { element = el
@@ -195,7 +237,7 @@ floatInput el =
     }
 
 {-| A simple date input -}
-dateInput : Element Date.Date String -> H.Html
+dateInput : Element Date.Date String () -> H.Html
 dateInput el =
     basicInput
     { element = el
@@ -211,7 +253,7 @@ type alias TimeOfDay =
     }
 
 {-| A simple time input -}
-timeInput : Element TimeOfDay String -> H.Html
+timeInput : Element TimeOfDay String () -> H.Html
 timeInput el =
     basicInput <|
     let decode str =
@@ -230,7 +272,7 @@ timeInput el =
        }
 
 {-| A simple checkbox input -}
-checkBox : Element Bool e -> H.Html
+checkBox : Element Bool e st -> H.Html
 checkBox el =
     H.div [ A.class ("checkbox" ++ if isError el.value.value then " has-error" else "") ]
     [ H.label []
@@ -239,7 +281,7 @@ checkBox el =
             , A.id el.id
             , A.checked (Result.withDefault False el.value.value)
             , E.on "change" E.targetChecked <| \cb ->
-                el.onValue <| \curVal -> { curVal | userInput = if cb then "True" else "False", value = Ok cb }
+                el.onValue <| noFx <| \curVal -> { curVal | userInput = if cb then "True" else "False", value = Ok cb }
             ] ++ (focusHandlers True el.onValue)
         , text (" " ++ el.label)
         ]
@@ -250,7 +292,7 @@ checkBox el =
 
 {-| Spec for selectBox -}
 type alias SelectElement v e =
-    FormElement v e
+    FormElement v e ()
     { choices: List v
     , displayChoice: v -> String
     , choiceValue: v -> String
@@ -275,7 +317,7 @@ selectBox sel =
         [ A.id el.id
         , A.class "form-control"
         , E.on "change" E.targetValue <| \str ->
-            el.onValue <| \curVal ->
+            el.onValue <| noFx <| \curVal ->
             { curVal
                 | userInput = str
                 , value = sel.decoder str
@@ -283,20 +325,20 @@ selectBox sel =
         ] ++ (focusHandlers sel.autoBlur el.onValue)
 
 
-{-| Check if the given FormValue contains a valid value -}
-validFormValue : FormValue e t -> Bool
+{-| Check if the given FormValueSt contains a valid value -}
+validFormValue : FormValueSt e t st -> Bool
 validFormValue fv =
     case fv.value of
       Ok _ -> True
       Err _ -> False
 
 {-| Read the current form value if available -}
-getFormValue : FormValue e t -> Maybe t
+getFormValue : FormValueSt e t st -> Maybe t
 getFormValue fv =
     case fv.value of
       Ok val -> Just val
       Err _ -> Nothing
 
 {-| Read the current form value or fallback to a default -}
-getFormValueDef : t -> FormValue e t -> t
+getFormValueDef : t -> FormValueSt e t st -> t
 getFormValueDef def = Maybe.withDefault def << getFormValue

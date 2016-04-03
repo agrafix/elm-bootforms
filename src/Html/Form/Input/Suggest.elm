@@ -23,7 +23,7 @@ import String
 
 {-| Spec for suggestive input -}
 type alias SuggestiveInput e =
-    I.FormElement String e
+    I.FormElement String e ()
     { choices: SearchIndex
     , maxSuggest: Int
     , minTyped: Int
@@ -110,7 +110,7 @@ suggestiveTextInput sel =
                   [ H.button
                         [ A.class "btn btn-default btn-xs"
                         , E.onWithOptions "click" { stopPropagation = True, preventDefault = True } Json.value <| \_ ->
-                            el.onValue <| \curVal ->
+                            el.onValue <| I.noFx <| \curVal ->
                             { curVal
                                 | userInput = sug
                                 , value = sel.decoder sug

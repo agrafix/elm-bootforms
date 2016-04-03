@@ -38,8 +38,8 @@ update : Action -> Model -> (Model, Effects Action)
 update a m =
     case a of
         Nop -> noFx m
-        SetDate f -> noFx { m | date = f m.date }
-        SetName f -> noFx { m | name = f m.name }
+        SetDate f -> ({ m | date = I.apply f m.date }, I.mappedEffect SetDate f)
+        SetName f -> ({ m | name = I.apply f m.name }, I.mappedEffect SetName f)
 
 view : Signal.Address Action -> Model -> H.Html
 view addr =
